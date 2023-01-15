@@ -1,0 +1,155 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+The GSS is a personal interview survey and collects information on a wide range of demographic characteristics of respondents and their parents.
+
+The basic GSS design is a repeated cross-sectional survey of a nationally representative sample of non-institutionalized adults who speak either English or Spanish. Subsampling of nonrespondents is done to limit survey costs while maintaining a nationally representative sample.Each GSS formally includes an A sample and a B sample. The preferred interview mode is in person interviews; however, a few interviews will be done by telephone in the event that an inperson contact cannot be scheduled.
+
+Therefore, the random sampling was used in this study. Because of its generalizability, correlation statements can be made by exploring this dataset.
+
+* * *
+
+## Part 2: Research question
+
+Research question: Is the university degree related to the income in America citizen between 2008-2012?
+
+Reason: (1) A part of parents consider that the university degree can help children have a higher income career. But another parents do not think so. Therefore, it is interesting to know whether it appear to be a  relationship between university degree and income.
+(2) Because the educations systems of immigrants can be different, so we focus on America citizen only.
+(3) With the development of technology, occupational composition will change. Instead of exploring the data from 1972 to 2012, we focus on the last five years(2008-2012).
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+```{r}
+#see the names of variety
+names(gss)
+```
+
+
+```{r}
+#selecting my data and giving a numerical summary
+educa_income <- gss %>%
+  filter(tolower(uscitzn)=="a u.s. citizen") %>%
+  filter(between(year,2008,2012)) %>%
+  select(incom16,degree,year,uscitzn) 
+summary(educa_income)
+
+```
+The type of variety "year" should be factor. Since we do not need to use it in analysis, we ignore this problem.
+
+```{r}
+#visualization: the distributions of sample statistics
+ggplot(data = educa_income, aes(x=incom16)) + geom_bar()
+```
+Because the number of "Far Above Average" is too small to meet the condition for the chi-square test, we need to change our research purpose. We only analyse the population who have the income not far away from average. 
+
+```{r}
+# We only analyse the population who have the income not far away from average.
+educa_income <- educa_income %>%
+  filter(incom16 == "Average" |incom16 == "Above Average" | incom16 == "Below Average")
+```
+Now, the total simple size is 377.
+
+```{r}
+#visualization: the distributions of sample statistics
+ggplot(data = educa_income, aes(x=degree)) + geom_bar()
+```
+We do not need "NA" for our future analysis.
+
+```{r}
+#cleaning our data and separate it into two group: Have university degree(True); Don't have university degree (False)
+educa_income <- educa_income %>%
+  filter(!is.na(degree)) %>%
+  mutate(isUniversity = ifelse(degree == "Bachelor" | degree == "Graduate", "True", "False"))
+```
+
+
+```{r}
+# Looking at the structure of dataframe
+str(educa_income)
+```
+
+* * *
+
+## Part 4: Inference
+
+**state hypotheses**
+We need to know the relationship between university education and income. 
+We assume: H0 (nothing going on): university education and income are independent.
+           HA (Something going on): university education and income are dependent.
+           
+**state method to be used and why and how**
+(1)All our variable are categorical, so we need to use proportions.
+(2)The variable "Income" has three levels(>2), so we need to use chi-square test.
+(3)We have two variables(income and education). so we need to use the chi-square independence test.
+
+We take the income level as the explanatory variable, it divide the data into three groups("Average", "Above Average", "Below Average"). 
+We take the education level as the response variable: Have university degree = success; Don't have university degree = failure.
+And then, We are assuming that the rate of response variable dose not vary by explanatory variable. If the P-value < 0.05,we reject H0. if not, we accept the H0. 
+
+**check the condition**
+1: Independent:
+(1) The sample was random assigned.
+(2) Sampling without replacement, the total sample size is 375 < 10% of population.
+(3) Each case only contributes to one cell in the table.
+
+2: Sample size:
+
+```{r}
+# check conditions: sample size
+ggplot(data = educa_income, aes(x=incom16, y= isUniversity)) +geom_count()
+
+```
+To meet the condition, each particular scenario(cell) must have at least 5 expected case. We can see the smallest two count are in two groups of the observations who have the university degree. 
+
+```{r}
+# check conditions: Whether the smallest two count arre greater than 5.
+sample_size <- educa_income %>%
+  filter(isUniversity == "True")
+
+sample_size %>%
+  group_by(incom16) %>%
+  summarise(cell_size =n())
+```
+Because the smallest cell has 23 case(>5), so we can believe every particular cell has more than 5 case.
+
+In summary, our dataset meets the condition for the Chi-Square Independence Test.
+
+**perform inference**
+
+```{r}
+inference(y = isUniversity, x = incom16, data = educa_income, type = "ht", null = 0, statistic = "proportion", success = "True", method = "theoretical", alternative = "greater", sig_level = 0.05, conf_level = 0.95)
+```
+
+**Interpret result**
+Since the p_value equal 0.2567 (> 0.05), we are unable to reject the H0. The data provide convincing evidence that university degree and income are independent.
